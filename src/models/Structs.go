@@ -5,107 +5,11 @@ import (
 	"strconv"
 )
 
-type SupportedCountries struct {
-	//c.country_id,c.name,c.iso_code,fc.fiat_currency_id,fc.currency_code
-	CountryID       uint64 `json:"country_id"`
-	CountryFlag     string `json:"country_flag"`
-	CountryName     string `json:"country_name"`
-	CountryCode     string `json:"country_code"`
-	FiatCurrencyId  uint64 `json:"fiat_currency_id"`
-	FiatCurencyCode string `json:"fiat_currency_code"`
-}
-type SupportedPaymentMethods struct {
-	//payment_method_id,label,payment_type_id
-	PaymentMethodId   uint64 `json:"payment_method_id"`
-	PaymentMethodName string `json:"payment_method_name"`
-	PaymentTypeID     uint64 `json:"payment_type_id"`
-}
-type SupportedChains struct {
-	//chain_name	block_chain_id	chain_code
-	ChainName    string `json:"chain_name"`
-	BlockChainId string `json:"blockchain_id"`
-	ChainCode    string `json:"chain_code"`
-}
-
-type SignupPayload struct {
-	Email           string    `json:"email"`
-	Msisdn          StringInt `json:"msisdn"`
-	Password        string    `json:"password"`
-	ConfirmPassword string    `json:"confirm_password"`
-}
-type SupportedTokens struct {
-	//c.crypto_currency_id,c.name,c.code
-	CryptoCurrencyId uint64 `json:"crypto_currency_id"`
-	CryptoName       string `json:"crypto_name"`
-	CryptoCode       string `json:"crypto_code"`
-}
-
-type OfferList struct {
-	Count  int            `json:"count"`
-	Offers []OfferDbQuery `json:"offers"`
-}
-type WalletAuth struct {
-	Walletdata struct {
-		Signiture      string `json:"signiture"`
-		Nounce         string `json:"nounce"`
-		Displayaddress string `json:"displayAddress"`
-		Address        string `json:"Address"`
-		Chainid        string `json:"chainId"`
-		Isconnected    bool   `json:"isconnected"`
-		Errormessage   string `json:"errorMessage"`
-	} `json:"walletData"`
-}
-
-type OfferDbQuery struct {
-	//crypto_currency_id
-	Seen               int           `json:"seen"`
-	PercentDiff        StringFloat   `json:"percent_diff"`
-	CryptoCurrencyId   int           `json:"crypto_currency_id"`
-	ForexExchangeID    int           `json:"forex_exchange_id"`
-	ForexExchangeUsd   StringFloat   `json:"usd_exchange_rate"`
-	ChainName          string        `json:"chain_name"`
-	ChainCode          string        `json:"chain_code"`
-	ChainID            string        `json:"chain_id"`
-	CountryID          int           `json:"country_id"`
-	CountryFlag        string        `json:"country_flag"`
-	CountryCode        string        `json:"country_code"`
-	CountryName        string        `json:"country_name"`
-	OfferID            int           `json:"offer_id"`
-	BlockChainId       string        `json:"blockchain_id"`
-	Type               string        `json:"type"`
-	MinFiatAmount      float64       `json:"min_fiat_amount"`
-	MaxFiatAmount      float64       `json:"max_fiat_amount"`
-	FiatCode           string        `json:"fiat_code"`
-	CryptoCode         string        `json:"crypto_code"`
-	Payment            []PaymentMode `json:"payment"`
-	FiatPricePerCrypto float64       `json:"fiat_price_per_crypto"`
-	Created            string        `json:"created"`
-	MaxCrypto          float64       `json:"max_crypto"`
-}
-
 type PaymentMode struct {
 	PaymentMethodId int    `json:"payment_method_id"`
 	Tags            string `json:"tags"`
 	PaymentMethod   string `json:"payment_method"`
 	PaymentType     string `json:"payment_type"`
-}
-
-type OfferQuery struct {
-	CountryID       StringInt   `json:"country_id"`
-	CryptoID        StringInt   `json:"crypto_currency_id"`
-	BlockchainID    StringInt   `json:"blockchain_id"`
-	PaymentMethodID StringFloat `json:"payment_method_id"`
-}
-type StartTradeQuery struct {
-	OfferID       StringInt   `json:"offer_id"`
-	FiatAmount    StringFloat `json:"fiat_amount"`
-	WalletAccount string      `json:"wallet_account"`
-}
-
-type HttpResponse struct {
-	Message string      `json:"message"`
-	Status  string      `json:"status"`
-	Data    interface{} `json:"data"`
 }
 
 type StringInt int
@@ -211,18 +115,21 @@ type PaxfulOffers struct {
 		Offers     []struct {
 			OfferID                    string      `json:"offer_id"`
 			OfferType                  string      `json:"offer_type"`
+			OfferLink                  string      `json:"offer_link"`
 			CurrencyCode               string      `json:"currency_code"`
 			FiatCurrencyCode           string      `json:"fiat_currency_code"`
 			CryptoCurrencyCode         string      `json:"crypto_currency_code"`
 			FiatPricePerCrypto         float64     `json:"fiat_price_per_crypto"`
-			FiatAmountRangeMin         int         `json:"fiat_amount_range_min"`
-			FiatAmountRangeMax         int         `json:"fiat_amount_range_max"`
+			FiatAmountRangeMin         float64     `json:"fiat_amount_range_min"`
+			FiatAmountRangeMax         float64     `json:"fiat_amount_range_max"`
 			PaymentMethodName          string      `json:"payment_method_name"`
 			Active                     bool        `json:"active"`
 			PaymentMethodSlug          string      `json:"payment_method_slug"`
 			PaymentMethodGroup         string      `json:"payment_method_group"`
 			OfferOwnerFeedbackPositive int         `json:"offer_owner_feedback_positive"`
 			OfferOwnerFeedbackNegative int         `json:"offer_owner_feedback_negative"`
+			OfferOwnerProfileLink      string      `json:"offer_owner_profile_link"`
+			OfferOwnerUsername         string      `json:"offer_owner_username"`
 			LastSeen                   string      `json:"last_seen"`
 			LastSeenTimestamp          int         `json:"last_seen_timestamp"`
 			RequireVerifiedEmail       bool        `json:"require_verified_email"`
@@ -230,6 +137,7 @@ type PaxfulOffers struct {
 			RequireMinPastpaxful       interface{} `json:"require_min_past_paxful"`
 			RequireVerifiedID          bool        `json:"require_verified_id"`
 			PaymentMethodLabel         string      `json:"payment_method_label"`
+			CountryName                string      `json:"country_name"`
 			OfferTerms                 string      `json:"offer_terms"`
 			IsBlocked                  bool        `json:"is_blocked"`
 			Tags                       []struct {
@@ -249,8 +157,8 @@ type OfferGetData struct {
 		Margin                                StringFloat `json:"margin"`
 		Active                                bool        `json:"active"`
 		BlockAnonymizerUsers                  bool        `json:"block_anonymizer_users"`
-		FiatAmountRangeMin                    int         `json:"fiat_amount_range_min"`
-		FiatAmountRangeMax                    int         `json:"fiat_amount_range_max"`
+		FiatAmountRangeMin                    float64     `json:"fiat_amount_range_min"`
+		FiatAmountRangeMax                    float64     `json:"fiat_amount_range_max"`
 		FeePercentage                         float64     `json:"fee_percentage"`
 		CryptoMin                             int         `json:"crypto_min"`
 		CryptoMax                             int64       `json:"crypto_max"`
