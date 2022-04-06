@@ -6,43 +6,67 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
 	"paxful/src/models"
+	"sync"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 )
 
-func (s *Server) PaxfulFetchOffers() {
-	// Fetch active offers from paxful
-
-	pticker := time.NewTicker(20 * time.Minute)
-	pquit := make(chan struct{})
-	func() {
-		for {
-			select {
-			case <-pticker.C:
-				go s.FetchActiveOffers()
-
-			case <-pquit:
-				pticker.Stop()
-				return
-			}
-		}
-	}()
+func (s *Server) MCapExchange(wg *sync.WaitGroup) {
+	defer wg.Done()
 	//fetch Forex httpforex()
 
-	forexTicker := time.NewTicker(1 * time.Minute)
+	forexTicker := time.NewTicker(6 * time.Minute)
 	forexquit := make(chan struct{})
 	func() {
 		for {
 			select {
 			case <-forexTicker.C:
-				go s.httpforex()
+				s.httpCryptoExchareRate()
 
 			case <-forexquit:
 				forexTicker.Stop()
+				return
+			}
+		}
+	}()
+}
+func (s *Server) Forex(wg *sync.WaitGroup) {
+	defer wg.Done()
+	//fetch Forex httpforex()
+
+	forexTicker := time.NewTicker(2 * time.Hour)
+	forexquit := make(chan struct{})
+	func() {
+		for {
+			select {
+			case <-forexTicker.C:
+				s.httpforex()
+
+			case <-forexquit:
+				forexTicker.Stop()
+				return
+			}
+		}
+	}()
+}
+func (s *Server) PaxfulFetchOffers(wg *sync.WaitGroup) {
+	// Fetch active offers from paxful
+	defer wg.Done()
+	pticker := time.NewTicker(30 * time.Minute)
+	pquit := make(chan struct{})
+	func() {
+		for {
+			select {
+			case <-pticker.C:
+				s.FetchActiveOffers()
+
+			case <-pquit:
+				pticker.Stop()
 				return
 			}
 		}
@@ -276,6 +300,108 @@ func (s *Server) httpforex() {
 			if _, err := s.DB.Exec(insertForex, fiat_currency_id, usdValue, usdValue); err != nil {
 				log.Printf("unable to insert to forex CURRENCY: %v because %v", code, err)
 				return
+			}
+
+		}
+
+	} else {
+		fmt.Println("Unable to fetch Forex", string(body))
+		err = errors.New("Error fetching Forex")
+	}
+}
+
+func (s *Server) httpCryptoExchareRate() {
+	//Get token
+	fmt.Println("Fetching httpCoinApi.... ")
+
+	data := ""
+	type Dbcryptos struct {
+		CryptoID int    `json:"crypto_currency_id"`
+		Code     string `json:"code"`
+	}
+	var cryptoDt []Dbcryptos
+
+	query := "SELECT crypto_currency_id,code FROM crypto_currency"
+	rows, err := s.DB.Query(query)
+	if err != nil {
+		log.Printf("Unable to fetch supported Chains from DB:  %v", err)
+	}
+
+	for rows.Next() {
+		var cryptodb Dbcryptos
+
+		if err = rows.Scan(&cryptodb.CryptoID, &cryptodb.Code); err != nil {
+			log.Printf("unable to read supported Chain record %v", err)
+		}
+		data = fmt.Sprintf("%v%v,", data, cryptodb.Code)
+		cryptoDt = append(cryptoDt, cryptodb)
+
+	}
+	if last := len(data) - 1; last >= 0 && data[last] == ',' {
+		data = data[:last]
+	}
+
+	endpoint := fmt.Sprintf("%v%v", os.Getenv("CRYPTOEXCHANGE_ENDPOINT"), data)
+	log.Printf("endpoint %v", endpoint)
+
+	//http request
+	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		log.Printf("unable to create httpRequest request because %v", err)
+		return
+	}
+
+	req.Header.Set("X-CMC_PRO_API_KEY", os.Getenv("X-CMC_PRO_API_KEY"))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Printf("unable to get response for httpRequest because %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("error: %v", err)
+
+	}
+	if resp.StatusCode >= 200 && resp.StatusCode <= 202 {
+		var cryptoforexData models.McapData
+
+		if err = json.Unmarshal(body, &cryptoforexData); err != nil {
+			fmt.Print("Unable to read response into struct because ", err)
+
+		}
+		if cryptoforexData.Data == nil {
+			fmt.Println(fmt.Printf("No currencies onf forex call??? %v ", string(body)))
+		}
+		var tokens map[string]interface{}
+		tokensBytes, _ := json.Marshal(cryptoforexData.Data)
+		json.Unmarshal(tokensBytes, &tokens)
+		for _, data := range tokens {
+			var tokenData map[string]interface{}
+			tokenDatasBytes, _ := json.Marshal(data)
+			json.Unmarshal(tokenDatasBytes, &tokenData)
+			symbol := tokenData["symbol"]
+			var QuoteData map[string]interface{}
+			QuoteDataBytes, _ := json.Marshal(tokenData["quote"])
+			json.Unmarshal(QuoteDataBytes, &QuoteData)
+			var PriceData map[string]interface{}
+			PriceDataBytes, _ := json.Marshal(QuoteData["USD"])
+			json.Unmarshal(PriceDataBytes, &PriceData)
+			price := PriceData["price"]
+			for i := 0; i < len(cryptoDt); i++ {
+				cryptoToken := cryptoDt[i]
+
+				if cryptoToken.Code == symbol {
+					insertData := "insert into crypto_exchange_rate set crypto_currency_id = ?, usd_price=?,exchange_rate_provider=?,created=now(),modified=now() ON DUPLICATE KEY UPDATE usd_price=?, modified = now();"
+					if _, err := s.DB.Exec(insertData, cryptoToken.CryptoID, price, "coinmarketcap", price); err != nil {
+						log.Printf("unable to insert to crypto_exchange_rate CURRENCY: %v because %v", symbol, err)
+						return
+					}
+
+				}
+
 			}
 
 		}
