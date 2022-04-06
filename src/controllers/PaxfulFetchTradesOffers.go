@@ -17,13 +17,13 @@ import (
 func (s *Server) PaxfulFetchOffers() {
 	// Fetch active offers from paxful
 
-	pticker := time.NewTicker(2 * time.Minute)
+	pticker := time.NewTicker(20 * time.Minute)
 	pquit := make(chan struct{})
 	func() {
 		for {
 			select {
 			case <-pticker.C:
-				s.FetchActiveOffers()
+				go s.FetchActiveOffers()
 
 			case <-pquit:
 				pticker.Stop()
@@ -33,13 +33,13 @@ func (s *Server) PaxfulFetchOffers() {
 	}()
 	//fetch Forex httpforex()
 
-	forexTicker := time.NewTicker(30 * time.Minute)
+	forexTicker := time.NewTicker(1 * time.Minute)
 	forexquit := make(chan struct{})
 	func() {
 		for {
 			select {
 			case <-forexTicker.C:
-				s.httpforex()
+				go s.httpforex()
 
 			case <-forexquit:
 				forexTicker.Stop()
@@ -68,9 +68,12 @@ func (s *Server) FetchActiveOffers() {
 			log.Printf("unable to read Currency record %v", err)
 			continue
 		}
-		s.httpOffers(fiat, "buy", 0)
-		time.Sleep(20 * time.Second)
-		s.httpOffers(fiat, "sell", 0)
+		go func() {
+			s.httpOffers(fiat, "buy", 0)
+			time.Sleep(30 * time.Second)
+			s.httpOffers(fiat, "sell", 0)
+		}()
+
 	}
 
 }
@@ -111,7 +114,11 @@ func (s *Server) httpOffers(fiatCurrency models.FiatCurency, offer_type string, 
 				log.Printf("unable to update  to offer  because %v", err)
 
 			}
+		} else {
+			log.Printf("Error maybe?: %v received: %v", fiatCurrency.FiatCurrencyCode, string(body))
+
 		}
+		log.Printf("FETCHING CURRENCY: %v received: %v", fiatCurrency.FiatCurrencyCode, len(paxfulOffers.Data.Offers))
 
 		for i := 0; i < len(paxfulOffers.Data.Offers); i++ {
 			crypto_currency_id := 0
@@ -157,7 +164,6 @@ func (s *Server) httpOffers(fiatCurrency models.FiatCurency, offer_type string, 
 			fiat_price_per_crypto := paxfulOffers.Data.Offers[i].FiatPricePerCrypto
 			payment_method_group := paxfulOffers.Data.Offers[i].PaymentMethodGroup
 			payment_method_name := paxfulOffers.Data.Offers[i].PaymentMethodName
-			lastSeen := paxfulOffers.Data.Offers[i].LastSeenTimestamp
 			insertPaymentGroupQuery := "insert ignore into payment_type (name) values (?)"
 			_, err := s.DB.Exec(insertPaymentGroupQuery, payment_method_group)
 			if err != nil {
@@ -210,13 +216,6 @@ func (s *Server) httpOffers(fiatCurrency models.FiatCurency, offer_type string, 
 
 			}
 
-			insertOfferLastSeen := "insert into offer_last_seen (offer_id,last_seen) values(?,?) ON DUPLICATE KEY UPDATE last_seen=?"
-			_, err = s.DB.Exec(insertOfferLastSeen, OfferID, lastSeen, lastSeen)
-			if err != nil {
-				log.Printf("unable to insert to offer_payment_method %v because %v", lastSeen, err)
-
-			}
-
 		}
 		if paxfulOffers.Data.Totalcount > (offset + 300) {
 			offset = +300
@@ -226,6 +225,7 @@ func (s *Server) httpOffers(fiatCurrency models.FiatCurency, offer_type string, 
 
 	} else {
 		fmt.Print("Unable to fetch offers", string(body))
+		log.Printf("Unable to fetch offers CURRENCY: %v MESSAGE: %v", fiatCurrency.FiatCurrencyCode, string(body))
 		err = errors.New("Error fetching offers")
 	}
 }
@@ -255,6 +255,9 @@ func (s *Server) httpforex() {
 		if err = json.Unmarshal(body, &forexData); err != nil {
 			fmt.Print("Unable to read response into struct because ", err)
 
+		}
+		if len(forexData.Data.Currencies) < 1 {
+			fmt.Println(fmt.Printf("No currencies onf forex call??? %v ", string(body)))
 		}
 		for i := 0; i < len(forexData.Data.Currencies); i++ {
 
